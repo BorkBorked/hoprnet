@@ -1,0 +1,12 @@
+[package]
+name = "hopr-crypto-random"
+version = "0.2.2"
+edition = "2021"
+
+[features]
+default = []
+fixed_rng = []
+
+[dependencies]
+rand = { workspace = true }
+generic-array = { workspace = true }

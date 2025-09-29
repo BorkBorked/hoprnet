@@ -22,32 +22,37 @@ usage() {
   msg
 }
 
-while (( "$#" )); do
+while (("$#")); do
   case "$1" in
-    -h|--help)
-      # return early with help info when requested
-      usage
-      exit 0
-      ;;
-    -n|--network)
-      network="${2}"
-      : "${network?"parameter <network> must not be empty"}"
-      shift 2
-      ;;
-    -*|--*=)
-      usage
-      exit 1
-      ;;
-    *)
-      shift
-      ;;
+  -h | --help)
+    # return early with help info when requested
+    usage
+    exit 0
+    ;;
+  -n | --network)
+    network="${2}"
+    : "${network?"parameter <network> must not be empty"}"
+    shift 2
+    ;;
+  -* | --*=)
+    usage
+    exit 1
+    ;;
+  *)
+    shift
+    ;;
   esac
 done
 
-
 cd "${mydir}/../"
 
-declare protocol_config="${mydir}/../packages/hoprd/crates/hopr-lib/data/protocol-config.json"
-declare deployments_summary="${mydir}/../packages/ethereum/contracts/contracts-addresses.json"
+declare protocol_config="${mydir}/../hopr/config/data/protocol-config.json"
+declare deployments_summary="${mydir}/../ethereum/contracts/contracts-addresses.json"
+
+# Sanity checks
+if [[ ! -f $protocol_config ]]; then
+  echo "ERROR: protocol config not found at: $protocol_config" >&2
+  exit 1
+fi
 
 update_protocol_config_addresses "${protocol_config}" "${deployments_summary}" "${network}" "${network}"

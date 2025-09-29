@@ -1,11 +1,29 @@
 #!/usr/bin/env bash
 
-# prevent execution of this script, only allow execution
+# prevent execution of this script, only allow sourcing
 $(return >/dev/null 2>&1)
-test "$?" -eq "0" || { echo "This script should only be sourced." >&2; exit 1; }
+test "$?" -eq "0" || {
+  echo "This script should only be sourced." >&2
+  exit 1
+}
 
 # exit on errors, undefined variables, ensure errors in pipes are not hidden
 set -Eeuo pipefail
+
+function check_package() {
+  local package_name="$1"
+  local exit_code=0
+
+  which "$package_name" >/dev/null || exit_code=$?
+
+  if [ "${exit_code}" = "0" ]; then
+    log "$package_name already installed"
+    return 0
+  else
+    log "$package_name not found"
+    return 1
+  fi
+}
 
 # $1=version string, semver
 function get_version_maj_min() {
@@ -35,58 +53,8 @@ function ensure_port_is_free() {
   fi
 }
 
-# $1 = port to wait for
-# $2 = host to check port on
-# $3 = optional: file to tail for debug info
-# $4 = optional: delay between checks in seconds, defaults to 2s
-# $5 = optional: max number of checks, defaults to 1000
-function wait_for_http_port() {
-  local port host log_file delay max_wait cmd
-
-  port=${1}
-  host=${2}
-  log_file=${3:-}
-  delay=${4:-2}
-  max_wait=${5:-1000}
-  cmd="curl --silent "${host}:${port}""
-
-  wait_for_port "${port}" "${host}" "${log_file}" "${delay}" "${max_wait}" "${cmd}"
-}
-
-# $1 = port to wait for
-# $2 = optional: host to check port on, defaults to 127.0.0.1
-# $3 = optional: file to tail for debug info
-# $4 = optional: delay between checks in seconds, defaults to 2s
-# $5 = optional: max number of checks, defaults to 1000
-# $6 = optional: command to check
-function wait_for_port() {
-  local port host log_file delay max_wait cmd
-
-  port=${1}
-  host=${2:-127.0.0.1}
-  log_file=${3:-}
-  delay=${4:-10}
-  max_wait=${5:-1000}
-  # by default we do a basic listen check
-  cmd=${6:-nc -z -w 1 ${host} ${port}}
-
-  i=0
-  until ${cmd}; do
-    log "Waiting ${delay} seconds for port to be reachable ${host}:${port}"
-    if [ -s "${log_file}" ]; then
-      log "Last 5 logs from ${log_file}:"
-      tail -n 5 "${log_file}" | sed "s/^/\\t/"
-    fi
-    sleep "${delay}"
-    ((i=i+1))
-    if [ $i -gt "${max_wait}" ]; then
-      exit 1
-    fi
-  done
-}
-
 setup_colors() {
-  if [[ -t 2 ]] && [[ -z "${NO_COLOR:-}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
+  if [[ -t 2 ]] && [[ -z ${NO_COLOR:-} ]] && [[ ${TERM:-} != "dumb" ]]; then
     # shellcheck disable=SC2034
     NOFORMAT='\033[0m' RED='\033[0;31m' GREEN='\033[0;32m' ORANGE='\033[0;33m'
     # shellcheck disable=SC2034
@@ -133,10 +101,11 @@ try_cmd() {
   else
     # the output needs to be captured to not mess up the return result
     # also exit on error needs to be disabled for execution of the command and re-enabled afterwards again
+    mkdir -p /tmp
     output_file="$(mktemp -q)"
     rm -f "${output_file}"
     set +Eeo pipefail
-    if eval "${cmd}" > "${output_file}"; then
+    if eval "${cmd}" >"${output_file}"; then
       # command succeeded, return the output
       set -Eeo pipefail
       result="$(cat "${output_file}")"
@@ -179,25 +148,6 @@ function wait_for_regex {
   echo "${res}"
 }
 
-# $1 = filename
-# $2 = expected content
-function expect_file_content() {
-  local filename expected actual
-
-  filename="${1}"
-  expected="${2}"
-  actual="$(cat "${filename}")"
-
-  if [[ "${expected}" != "${actual}" ]]; then
-    log "⛔️ bad content for ${filename}"
-    log "expected: "
-    log "${expected}"
-    log "actual: "
-    log "${actual}"
-    exit 1
-  fi
-}
-
 function find_tmp_dir() {
   local tmp
 
@@ -208,8 +158,8 @@ function find_tmp_dir() {
   fi
 
   if [ ! -d "${tmp}" ] || [ ! -w "${tmp}" ]; then
-    msg "Neither /tmp or /var/tmp can be used for writing logs";
-    exit 1;
+    msg "Neither /tmp or /var/tmp can be used for writing logs"
+    exit 1
   fi
 
   echo ${tmp}
@@ -217,7 +167,7 @@ function find_tmp_dir() {
 
 # encode API token
 # $1 = api token
-encode_api_token(){
+encode_api_token() {
   local api_token
 
   api_token=${1}
@@ -227,11 +177,11 @@ encode_api_token(){
 }
 
 # $1 = optional: endpoint, defaults to http://localhost:3001
-get_native_address(){
+get_native_address() {
   local endpoint url cmd
 
   endpoint="${1:-localhost:3001}"
-  url="${endpoint}/api/v3/account/addresses"
+  url="${endpoint}/api/v4/account/addresses"
   cmd="$(get_authenticated_curl_cmd "${url}")"
 
   try_cmd "${cmd}" 30 5 | jq -r ".native"
@@ -242,7 +192,7 @@ get_hopr_address() {
   local endpoint url cmd
 
   endpoint="${1:-localhost:3001}"
-  url="${endpoint}/api/v3/account/addresses"
+  url="${endpoint}/api/v4/account/addresses"
   cmd="$(get_authenticated_curl_cmd "${url}")"
 
   try_cmd "${cmd}" 30 5 | jq -r ".hopr"
@@ -257,7 +207,7 @@ validate_hopr_address() {
   api_token="${2}"
 
   hopr_address="$(get_hopr_address "${api_token}@${endpoint}")"
-  if [[ -z "${hopr_address}" ]]; then
+  if [[ -z ${hopr_address} ]]; then
     log "-- could not derive hopr address from endpoint ${endpoint}"
     exit 1
   fi
@@ -312,7 +262,7 @@ get_authenticated_curl_cmd() {
   # set default protocol if none was found
   local protocol="http://"
   # extract protocol prefix incl. separator ://
-  if [[ "${full_endpoint}" =~ "://" ]]; then
+  if [[ ${full_endpoint} =~ "://" ]]; then
     protocol="$(echo "${full_endpoint}" | sed -e's,^\(.*://\).*,\1,g')"
   fi
 
@@ -333,9 +283,7 @@ get_authenticated_curl_cmd() {
 
   # add auth info if token was found previously
   if [ -n "${api_token}" ]; then
-    local api_token_encoded
-    api_token_encoded="$(encode_api_token "${api_token}")"
-    cmd+=" --header \"Authorization: Basic ${api_token_encoded}\""
+    cmd+=" --header \"X-Auth-Token: ${api_token}\""
   fi
 
   # return full command
@@ -358,10 +306,20 @@ update_protocol_config_addresses() {
 
   # copy all the fields except for the `stake_season`
   source_data="$(jq -r ".networks.\"${source_network}\"" "${source_file}" | jq "{environment_type: .environment_type, indexer_start_block_number: .indexer_start_block_number, addresses: .addresses}")"
-  jq --argjson inputdata "${source_data}" ".networks.\"${destination_network}\" += \$inputdata" "${target_file}" > "${target_file}.new"
+  jq --argjson inputdata "${source_data}" ".networks.\"${destination_network}\" += \$inputdata" "${target_file}" >"${target_file}.new"
   mv "${target_file}.new" "${target_file}"
 
   log "contract addresses are updated in protocol configuration"
+}
+
+# $1 - rpc endpoint
+get_eth_block_number() {
+  local cmd endpoint
+
+  endpoint="$1"
+  cmd="curl --silent --retry-connrefused --retry 10 --retry-delay 1 --json '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":67}' ${endpoint}"
+
+  try_cmd "${cmd}" 10 1
 }
 
 setup_colors

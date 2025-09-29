@@ -10,69 +10,101 @@ name: Open Release
 on:
   workflow_call:
     inputs:
-      base_branch:
+      source_branch:
         required: true
         type: string
       release_type:
         required: true
         type: string
-    secrets:
-      GH_RUNNER_TOKEN:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of the release to open'
         required: true
+        type: choice
+        options:
+          - Major
+          - Minor
+          - Patch
+          - ReleaseCandidate
+        default: Patch
 
 concurrency:
   group: open-release
   cancel-in-progress: true
 
-jobs:
+permissions:
+  contents: read
 
+jobs:
   open-release:
     name: Open Release
-    runs-on: ubuntu-2-core
+    runs-on: self-hosted-hoprnet-small
     steps:
-      - name: Checkout hoprnet repository
-        uses: actions/checkout@v4
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
         with:
-          ref: "${{ inputs.base_branch }}"
+          disable-sudo: true
+          egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
+
+      - name: Set environment variables
+        id: vars
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
+            echo "The workflow is triggered by other pipeline"
+            echo "source_branch=${{ inputs.source_branch }}"  | tee -a $GITHUB_OUTPUT
+            echo "release_type=${{ inputs.release_type }}"  | tee -a $GITHUB_OUTPUT
+          else
+            echo "The workflow is triggered manually"
+            echo "source_branch=${{ github.ref_name }}" | tee -a $GITHUB_OUTPUT
+            echo "release_type=${{ github.event.inputs.release_type }}" | tee -a $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout hoprnet repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          ref: "${{ steps.vars.outputs.source_branch }}"
 
       - name: Bump Version
         id: bump
         run: |
-            next_version=$(./scripts/get-next-version.sh ${{ inputs.release_type }})
-            ./scripts/bump-version.sh ${next_version}
-            echo "next_version=${next_version}" >> $GITHUB_OUTPUT
+          next_version=$(./scripts/get-next-version.sh ${{ steps.vars.outputs.release_type }})
+          ./scripts/bump-version.sh ${next_version}
+          echo "next_version=${next_version}" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         with:
-            token: ${{ secrets.GH_RUNNER_TOKEN }}
-            commit-message: "Bump to version ${{ steps.bump.outputs.next_version }}"
-            base: ${{ inputs.base_branch }}
-            title: "Open release ${{ steps.bump.outputs.next_version }}"
-            body: "The scope of this PR is to create the contents of the new release ${{ steps.bump.outputs.next_version }}"
-            branch: bot/open-${{ inputs.release_type }}-${{ steps.bump.outputs.next_version }}
-            delete-branch: true
-            draft: true
-            assignees: ${{ github.actor }}
-            team-reviewers: "@hoprnet/hopr-development"
+          token: ${{ secrets.GH_RUNNER_TOKEN }}
+          commit-message: "Bump to version ${{ steps.bump.outputs.next_version }}"
+          base: ${{ steps.vars.outputs.source_branch }}
+          title: "build: Open release ${{ steps.bump.outputs.next_version }}"
+          body: "The scope of this PR is to create the contents of the new release ${{ steps.bump.outputs.next_version }}"
+          branch: bot/open-${{ steps.vars.outputs.release_type }}-${{ steps.bump.outputs.next_version }}
+          delete-branch: true
+          draft: true
+          assignees: ${{ github.actor }}
+          team-reviewers: "@hoprnet/hopr-development"
 
       - name: Enable Auto Merge
         run: |
-            git fetch
-            git checkout bot/open-${{ inputs.release_type }}-${{ steps.bump.outputs.next_version }}
-            gh pr ready
-            gh pr merge --auto --delete-branch --squash
+          git fetch
+          git checkout bot/open-${{ steps.vars.outputs.release_type }}-${{ steps.bump.outputs.next_version }}
+          gh pr edit --add-reviewer "hoprnet/hopr-development"
+          gh pr ready
         env:
           GH_TOKEN: ${{ secrets.GH_RUNNER_TOKEN }}
 
       - name: Create Milestone
         run: |
-            milestone_number=$(gh api repos/${{ github.repository }}/milestones | jq -r --arg version "${{ steps.bump.outputs.next_version }}"  ' to_entries[] | select(.value.title | test($version)).value.number')
-            if [ -z $milestone_number ]; 
-            then
-              echo '{ "title": "${{ steps.bump.outputs.next_version }}", "state": "open" }' | gh api --method POST repos/${{ github.repository }}/milestones --input -
-            else
-              echo "Milestone ${{ steps.bump.outputs.next_version }} already created"
-            fi
+          milestone_number=$(gh api "repos/${{ github.repository }}/milestones" | jq -r --arg version "${{ steps.bump.outputs.next_version }}"  ' to_entries[] | select(.value.title | test($version)).value.number')
+          if [ -z $milestone_number ];
+          then
+            echo '{ "title": "${{ steps.bump.outputs.next_version }}", "state": "open" }' | gh api --method POST repos/${{ github.repository }}/milestones --input -
+          else
+            echo "Milestone ${{ steps.bump.outputs.next_version }} already created"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GH_RUNNER_TOKEN }}

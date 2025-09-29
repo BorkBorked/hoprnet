@@ -1,0 +1,313 @@
+---
+# Main node's identity that defined the on-chain and off-chain keys
+identity:
+  # Path to the identity file
+  # A new identity file will be created if it does not exist
+  file: path/to/identity.file
+  # Password for the identity file
+  password: "change_me"
+  # If specified, the above identity file is ignored and the node
+  # directly uses the provided private key.
+  # private_key: ''
+# Configuration of the REST API
+api:
+  # Indicates whether the REST API should be enabled.
+  enable: false
+  # What kind of authentication the REST API should use.
+  # Possible value is `None` or `!Token <some token>` which will
+  # enforce Bearer token authentication.
+  auth: None
+  # Defines the local interface host where the API should
+  # listen on.
+  host:
+    # Address of the local interface to listen on
+    address: !IPv4 127.0.0.1
+    # REST API TCP listen port
+    port: 3001
+# Configuration of the HOPR protocol
+hopr:
+  # Specifies host to listen on for the HOPR P2P protocol
+  host:
+    # Specifies the external IP address of the local interface
+    # that is connected to the Internet. This address will be
+    # announced on-chain.
+    address: !IPv4 1.2.3.4
+    # Listen TCP port
+    port: 9091
+  # Specifies details for the database used by the HOPR node
+  db:
+    # Path to the directory with the database
+    data: /app/db
+    # If set, the database will be created (if it does not exist).
+    # Otherwise, if false is given and the database is not present,
+    # the node will fail to start.
+    initialize: true
+    # If set, will overwrite and re-initialize any existing database
+    # in the given directory.
+    force_initialize: false
+  # Global configuration of Session management
+  session:
+    # How many seconds it takes before Session is considered idle and is closed automatically
+    idle_timeout: 180
+    # Maximum number of outgoing or incoming Sessions allowed by the Session manager
+    maximum_sessions: 2048
+    # How many retries are made to establish an outgoing Session
+    establish_max_retries: 3
+    # How many seconds to wait between retries to establish an outgoing Session
+    # Random jitter is always added to this value for each retry.
+    establish_retry_timeout: 2
+    # Sampling interval for SURB balancer in ms
+    balancer_sampling_interval: 500
+    # Minimum runway of received SURBs in seconds
+    balancer_minimum_surb_buffer_duration: 5
+  # Configuration of node's Safe
+  safe_module:
+    # Node's safe transaction provider
+    # Such as https://safe-transaction.prod.hoprtech.net/
+    safe_transaction_service_provider: https:://provider.com/
+    # Node's safe address, this must be provided by the user
+    safe_address: "0x0000000000000000000000000000000000000000"
+    # Node's safe module address, this must be provided by the user
+    module_address: "0x0000000000000000000000000000000000000000"
+  # Configuration of HOPR channel strategies.
+  strategy:
+    # Will not continue executing the next strategy in the chain
+    # if one of them failed.
+    on_fail_continue: true
+    # Allows nesting strategy chains via !MultiStrategy
+    allow_recursive: false
+    # Sets the interval between strategy executions in seconds.
+    execution_interval: 60
+    # Contains the actual chain of strategies to execute in the given order.
+    # If left empty, the node will behave as if only `!Passive` strategy
+    # was given.
+    strategies:
+      - !AutoRedeeming
+        #
+        # Channel strategy that performs automatic redemption of
+        # a winning acknowledged ticket
+        #
+        # If set, the strategy will redeem only aggregated tickets.
+        redeem_only_aggregated: false
+        # If set, all tickets will be redeemed on channel closure.
+        redeem_all_on_close: true
+        # Sets the minimum value of a ticket to be able to redeem it.
+        minimum_redeem_ticket_value: "1 wxHOPR"
+        # If set, the strategy will redeem each incoming winning ticket.
+        # Otherwise, it will try to redeem tickets in all channels periodically.
+        # Set this to `true` when winning tickets are not happening too often (e.g., when winning probability is below 1%).
+        # Set this to `false` when winning tickets are happening very often (e.g., when winning probability is above 1%).
+        redeem_on_winning: true
+        #
+        ############################################
+        #
+        # Channel auto-funding strategy.
+        # Automatically funds channels with the given funding amount
+        # if the stake on any channel drops below the given threshold
+        #
+        #- !AutoFunding
+        #
+        # Amount to automatically fund a channel that dropped
+        # below the threshold
+        # funding_amount: "10 wxHOPR"
+        #
+        # Auto funding threshold
+        # min_stake_threshold: "1 wxHOPR"
+        #
+        ############################################
+        #
+        # Defines a promiscuous strategy that automatically manages HOPR channels
+        # based on measured network qualities of HOPR nodes in the network.
+        #
+        #- !Promiscuous
+        #
+        # # Maximum number of opened channels the strategy should maintain.
+        # max_channels: 30
+        #
+        # # A quality threshold between 0 and 1 used to determine whether the strategy should open channel with the peer.
+        # network_quality_open_threshold: 0.9
+        #
+        # # A quality threshold between 0 and 1 used to determine whether the strategy should close channel with the peer.
+        # network_quality_close_threshold: 0.2
+        #
+        # Number of heartbeats sent to the peer before it is considered for selection.
+        # minimum_peer_pings: 50
+        #
+        # # A stake of tokens that should be allocated to a channel opened by the strategy.
+        # new_channel_stake: "10 wHOPR"
+        #
+        # # Minimum token balance of the node. When reached, the strategy will not open any new channels.
+        # minimum_safe_balance: "1000 wxHOPR"
+        #
+        # # If set, the strategy will aggressively close channels (even with peers above the `network_quality_threshold`)
+        # # if the number of opened outgoing channels (regardless if opened by the strategy or manually) exceeds the
+        # enforce_max_channels: true
+        #
+        # # Specifies a minimum version of the peer the strategy should open a channel to.
+        # # Accepts semver syntax.
+        # minimum_peer_version: ">=2.2.1"
+        #
+        ############################################
+        #
+        # Passive strategy does nothing. This is equivalent to leaving
+        # the `strategies` array empty.
+        #
+        #- !Passive
+        #
+        ############################################
+        #
+        # Strategy that monitors channels that are in `PendingToClose` state and
+        # their channel closure grace period has already elapsed, and on more issuing
+        # channel close transaction on these channels to finalize the closure.
+        #
+        # - !ClosureFinalizer
+        #
+        # Does not attempt to finalize closure of channels that have been overdue for closure for more than
+        # this number of seconds.
+        max_closure_overdue: 300
+
+  # Configuration of the heartbeat mechanism for probing other nodes in the HOPR network.
+  probe:
+    # The maximum time in seconds to wait for a probe to finish
+    timeout: 3
+    # The maximum number of concurrent heartbeat probes
+    max_parallel_probes: 50
+    # The time interval for which to consider peer reprobing in seconds
+    recheck_threshold: 60
+    # The delay between individual probing rounds for neighbor discovery
+    interval: 5
+  # Defines how the quality of nodes in the HOPR network
+  # is evaluated and criteria for nodes to be considered of good/bad quality.
+  # This is closely related to the heartbeat mechanism.
+  network_options:
+    # Minimum delay (seconds) will be multiplied by backoff, it will be half the actual minimum value.
+    min_delay: 1
+    # Maximum delay in seconds
+    max_delay: 300
+    # Quality threshold since a node is considered having "bad" connectivity
+    quality_bad_threshold: 0.1
+    # Quality threshold from which a node is considered available enough to be used
+    quality_offline_threshold: 0.0
+    # Quality step on failed/successful ping probe
+    quality_step: 0.1
+    # Size of the quality moving average window.
+    quality_avg_window_size: 25
+    # Minimum score to add a node to the routing table
+    node_score_auto_path_threshold: 0.95
+    # Maximum latency for the first hop in ms
+    max_first_hop_latency_threshold: 250
+    # Indicates how long (in seconds) a node is considered "ignored"
+    ignore_timeframe: 120
+    # Backoff exponent when probing nodes
+    backoff_exponent: 1.5
+    # Minimum backoff (in seconds) when probing nodes
+    backoff_min: 2.0
+    # Maximum backoff (in seconds) when probing nodes
+    backoff_max: 300.0
+  # Transport related configuration
+  transport:
+    # Should local addresses be announced on chain?
+    # Set to true for testing only
+    announce_local_addresses: false
+    # Should local addresses be preferred when dialing a peer?
+    # Set to true for testing only
+    prefer_local_addresses: false
+  # Configuration of various HOPR sub-protocols.
+  protocol:
+    # Outgoing ticket winning probability.
+    # Should not be lower than the minimum ticket winning probability set on-chain
+    # outgoing_ticket_winning_prob: 1.0
+    # port used for nat server functionality
+    autonat_port:
+  # Blockchain-specific configuration
+  chain:
+    # Indicates whether a node should announce itself on-chain
+    announce: true
+    # Which blockchain network should be used by the node
+    # Must be one of `protocols.networks`.
+    network: anvil-localhost
+    # RPC provider URL to use.
+    # If not given, it will use the network's chain default one.
+    provider: null
+    protocols:
+      # Lists different HOPR on-chain network deployments the node can use.
+      networks:
+        anvil-localhost:
+          chain: anvil
+          environment_type: local
+          version_range: "*"
+          indexer_start_block_number: 5
+          tags: []
+          addresses:
+            network_registry: 0x3aa5ebb10dc797cac828524e59a333d0a371443c
+            network_registry_proxy: 0x68b1d87f95878fe05b998f19b66f4baba5de1aed
+            channels: 0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae
+            token: 0x9a676e781a523b5d0c0e43731313a708cb607508
+            module_implementation: 0xa51c1fc2f0d1a1b8494ed1fe312d7c3a78ed91c0
+            node_safe_registry: 0x0dcd1bf9a1b36ce34237eeafef220932846bcd82
+            ticket_price_oracle: 0x7a2088a1bfc9d81c55368ae168c2c02570cb814f
+            winning_probability_oracle: 0x09635f643e140090a9a8dcd712ed6285858cebef
+            announcements: 0xc5a5C42992dECbae36851359345FE25997F5C42d
+            node_stake_v2_factory: 0xb7f8bc63bbcad18155201308c8f3540b07f84f5e
+          confirmations: 2
+          tx_polling_interval: 1000
+          max_block_range: 200
+      # Lists actual blockchains that HOPR networks can be deployed at
+      chains:
+        anvil:
+          description: Local Ethereum node, akin to Ganache, Hardhat chain
+          chain_id: 31337
+          live: false
+          default_provider: http://127.0.0.1:8545/
+          etherscan_api_url: null
+          max_fee_per_gas: 1 gwei
+          max_priority_fee_per_gas: 0.2 gwei
+          native_token_name: ETH
+          hopr_token_name: wxHOPR
+          max_rpc_requests_per_sec: 100
+          block_time: 5000
+          tags: []
+    # Configures whether the node will keep RPC logs after they were processed.
+    # By default (enabled), the node will clean such logs. If enabled, the node
+    # will keep logs which will require more disk space, however, it will allow
+    # the node to reconcile the state of the chain with the state of the node
+    # in future versions.
+    keep_logs: true
+    # Configures whether to use fast synchronization during node startup.
+    # When enabled, the node will process existing logs faster (approximately
+    # 10 minutes on Dufour network) but may consume more resources during
+    # the sync process. Recommended for initial setup or when recovering
+    # from a clean state.
+    fast_sync: true
+    # Configures whether the node should download a snapshot of logs
+    enable_logs_snapshot: false
+    # URL to download logs snapshot from.
+    # This should point to a publicly accessible tar.xz file containing
+    # the SQLite logs database files.
+    # logs_snapshot_url: "https://logs-snapshots.hoprnet.org/latest-stable.tar.xz"
+# Session Entry/Exit IP forwarding configuration for this node
+# This applies whenever the node is an Exit node of a Session.
+session_ip_forwarding:
+  #
+  # Indicates whether the allowlist in `target_allow_list` should be used.
+  # If set to `false`, all Session targets will be allowed.
+  use_target_allow_list: true
+  #
+  # List of IP address and port tuples (written as e.g.: "127.0.0.1:8080") which are allowed
+  # to be targets of incoming Sessions.
+  # This has an effect only if `use_target_allow_list` is `true`.
+  # If left empty (default), the node will deny any Session target and will effectively not act as an Exit node.
+  # For Session targets using a DNS name, the DNS resolution is performed first before the list is matched.
+  # Production configuration should always use this allowlist, e.g.: target_allow_list: ["127.0.0.1:8080"]
+  target_allow_list: []
+#
+# If the target is on TCP protocol, the Exit node can try to reach it this number of times.
+# max_tcp_target_retries: 10
+#
+# If a target on TCP protocol is retried to be reached, this is the delay in seconds between retries.
+# tcp_target_retry_delay: 2
+#
+# Specifies the default listen host for Session IP forwarding sockets.
+# This value is also used when the Session is opened with a partially specified listening host
+# to fill in the missing part.
+# default_entry_listen_host: 127.0.0.1:0

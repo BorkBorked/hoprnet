@@ -5,70 +5,179 @@
 name: Load Tests
 
 on:
-# Starts at 2:00 AM CET
-  # schedule:
-  #   - cron: '00 2 * * *'
+  workflow_call:
+    inputs:
+      test_id:
+        type: string
+        required: true
+      cluster_nodes:
+        type: string
+        required: true
+      topology:
+        type: string
+        required: true
+      workload:
+        type: string
+        required: true
+      duration:
+        type: number
+        required: true
+      echo_service_replicas:
+        type: number
+        required: true
+      payload_size:
+        type: number
+        required: true
+      download_throughput:
+        type: number
+        required: true
+      upload_throughput:
+        type: number
+        required: true
   workflow_dispatch:
     inputs:
       test_id:
         type: string
         required: true
         description: 'Test name'
-      network:
+      cluster_nodes:
         type: choice
         options:
-          - rotsee
-          - dufour
+          - core-rotsee
+          - core-dufour
+          - uhttp
+          - team
         required: true
-        description: 'Cluster of nodes'
+        description: 'Cluster of nodes to test'
+      topology:
+        type: choice
+        options:
+          - receiver
+          - many2many
+          - sender
+          - relayer
+        required: true
+        description: 'Nodes channel topology'
       workload:
         type: choice
         options:
+          - constant
+          - incremental
+          - hysteresis
           - sanity-check
-          - endurance
-          - full
+          - multiple-hops
         required: true
-        description: 'Type of workload'
-      rate:
+        description: 'Workload type'
+      duration:
+        type: number
+        default: 30
+        required: true
+        description: 'Test duration in minutes'
+      echo_service_replicas:
         type: number
         default: 1
         required: true
-        description: 'Number of messages per seconds'
+        description: 'Echo service replicas'
+      payload_size:
+        type: number
+        default: 10485760
+        required: true
+        description: 'Payload size in bytes'
+      download_throughput:
+        type: number
+        default: 1048576
+        required: true
+        description: 'Download throughput in bytes per second'
+      upload_throughput:
+        type: number
+        default: 524288
+        required: true
+        description: 'Upload throughput in bytes per second'
 
 concurrency:
   group: load-tests
   cancel-in-progress: true
 
 jobs:
-
   load-tests:
     name: Load Tests
-    runs-on: ubuntu-2-core
+    runs-on: self-hosted-hoprnet-small
     steps:
-
-      - name: Checkout hoprnet repository
-        uses: actions/checkout@v4
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
         with:
+          disable-sudo: true
+          egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
+      - name: Set environment variables
+        id: vars
+        run: |
+          if [ -z "${{ github.event.inputs.test_id }}" ]; then
+            echo "The workflow is triggered by other pipeline"
+            {
+              echo "TESTID=${{ inputs.test_id }}"
+              echo "K6_CLUSTER_NODES=${{ inputs.cluster_nodes }}"
+              echo "K6_TOPOLOGY_NAME=${{ inputs.topology }}"
+              echo "K6_WORKLOAD_NAME=${{ inputs.workload }}"
+              echo "K6_TEST_DURATION=${{ inputs.duration }}"
+              echo "K6_ECHO_SERVERS_REPLICAS=${{ inputs.echo_service_replicas }}"
+              echo "K6_PAYLOAD_SIZE=${{ inputs.payload_size }}"
+              echo "K6_DOWNLOAD_THROUGHPUT=${{ inputs.download_throughput }}"
+              echo "K6_UPLOAD_THROUGHPUT=${{ inputs.upload_throughput }}"
+            } >> $GITHUB_ENV
+          else
+            echo "The workflow is triggered manually"
+            {
+              echo "TESTID=${{ github.event.inputs.test_id }}"
+              echo "K6_CLUSTER_NODES=${{ github.event.inputs.cluster_nodes }}"
+              echo "K6_TOPOLOGY_NAME=${{ github.event.inputs.topology }}"
+              echo "K6_WORKLOAD_NAME=${{ github.event.inputs.workload }}"
+              echo "K6_TEST_DURATION=${{ github.event.inputs.duration }}"
+              echo "K6_ECHO_SERVERS_REPLICAS=${{ github.event.inputs.echo_service_replicas }}"
+              echo "K6_PAYLOAD_SIZE=${{ github.event.inputs.payload_size }}"
+              echo "K6_DOWNLOAD_THROUGHPUT=${{ github.event.inputs.download_throughput }}"
+              echo "K6_UPLOAD_THROUGHPUT=${{ github.event.inputs.upload_throughput }}"
+            } >> $GITHUB_ENV
+          fi
+
+      - name: Checkout hoprd-test repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
           repository: hoprnet/hoprd-test
-          ref: main
+          ref: main # Use different branch if needed to test a new development
+
+      - name: Setup GCP
+        id: gcp
+        uses: hoprnet/hopr-workflows/actions/setup-gcp@12c56020e16036982e6cc529848edeedfc705865 # master
+        with:
+          google-credentials: ${{ secrets.GCP_SA_TERRAFORM_JSON }}
+          login-artifact-registry: 'true'
+          install-sdk: 'true'
+          login-gke: 'true'
+          project: hopr-staging
 
       - name: Setup NodeJs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: 18
+          node-version: 22.19.0
+
+      - name: Get Hoprd Api token
+        id: token
+        run: |
+          hoprdApiToken=$(kubectl get secret -n k6-operator-system -o json hoprd-api-tokens | jq --arg entry "${K6_CLUSTER_NODES}" -r '.data[$entry]' | base64 -d)
+          echo "HOPRD_API_TOKEN=${hoprdApiToken}" >> $GITHUB_ENV
+
+      - name: Setup Load Testing environment
+        run: |
+          npm install
+          npm run setup
+        working-directory: "./k6"
 
       - name: Run Load test
         run: |
-          npm install
-          npm run test:${{ github.event.inputs.network }}:setup
           kubectl delete -f k6-test-run.yaml 2> /dev/null || true
+          echo "Execution parameters:"
+          env | grep K6_
           kubectl apply -f k6-test-run.yaml
         working-directory: "./k6"
-        env:
-          ENVIRONMENT_NAME: ${{ github.event.inputs.network }}
-          WORKLOAD_NAME: ${{ github.event.inputs.workload }}
-          SCENARIO_ITERATIONS: ${{ github.event.inputs.rate }}
-          TESTID: ${{ github.event.inputs.test_id }}
-          HOPRD_API_TOKEN: ${{ secrets.HOPRD_API_TOKEN }}
-
-

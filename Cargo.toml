@@ -3,95 +3,310 @@
 resolver = "2"
 
 members = [
-    "packages/core/crates/core-crypto",
-    "packages/core/crates/core-network",
-    "packages/core/crates/core-path",
-    "packages/core/crates/core-packet",
-    "packages/core/crates/core-protocol",
-    "packages/core/crates/core-p2p",
-    "packages/core/crates/core-strategy",
-    "packages/core/crates/core-transport",
-    "packages/core/crates/core-types",
-    "packages/core-ethereum/crates/core-ethereum-actions",
-    "packages/core-ethereum/crates/core-ethereum-api",
-    "packages/core-ethereum/crates/core-ethereum-db",
-    "packages/core-ethereum/crates/core-ethereum-indexer",
-    "packages/core-ethereum/crates/core-ethereum-types",
-    "packages/core-ethereum/crates/core-ethereum-rpc",
-    "packages/ethereum/crates/bindings",
-    "packages/hopli",
-    "packages/real/crates/real-base",
-    "packages/hoprd/crates/hopr-lib",
-    "packages/hoprd/crates/hoprd-hoprd",
-    "packages/hoprd/crates/hoprd-inbox",
-    "packages/hoprd/crates/hoprd-keypair",
-    "packages/utils/crates/utils-db",
-    "packages/utils/crates/utils-log",
-    "packages/utils/crates/utils-metrics",
-    "packages/utils/crates/utils-misc",
-    "packages/utils/crates/utils-types",
-    "packages/utils/crates/utils-validation"
+  "chain/actions",
+  "chain/api",
+  "chain/indexer",
+  "chain/rpc",
+  "chain/types",
+  "common/api",
+  "common/async-runtime",
+  "common/internal-types",
+  "common/network-types",
+  "common/parallelize",
+  "common/primitive-types",
+  "crypto/keypair",
+  "crypto/packet",
+  "crypto/random",
+  "crypto/sphinx",
+  "crypto/types",
+  "db/api",
+  "db/entity",
+  "db/migration",
+  "db/sql",
+  "ethereum/bindings",
+  "hopli",
+  "hopr/chain-config",
+  "hopr/hopr-lib",
+  "hoprd/hoprd",
+  "hoprd/rest-api",
+  "logic/path",
+  "logic/strategy",
+  "misc/metrics",
+  "misc/platform",
+  "protocols/app",
+  "protocols/session",
+  "protocols/start",
+  "transport/api",
+  "transport/bloom",
+  "transport/identity",
+  "transport/mixer",
+  "transport/network",
+  "transport/p2p",
+  "transport/probe",
+  "transport/protocol",
+  "transport/session",
+  "transport/ticket-aggregation",
 ]
 
 [workspace.dependencies]
-async-lock = "2.7.0"
-async-std = { version = "1.12.0", features = ["attributes"] }
-async-trait = "0.1"
-ethers = { version = "2.0.10", default-features = false }
-futures = "0.3.28"
-futures-lite = "1.12.0"
-futures-concurrency = "7.3.0"
-futures-timer = "3.0.2"
-getrandom = "0.2.10"
+alloy = { version = "=1.0.36", default-features = false, features = [
+  "essentials",
+  "json-rpc",
+  "node-bindings",
+  "contract",
+  "k256",
+  "std",
+] }
+anyhow = "1.0.100"
+aquamarine = "0.6.0"
+arrayvec = { version = "0.7.6", features = ["serde"] }
+async-compression = "0.4.31"
+async-channel = "2.5.0"
+async-lock = "3.4.1"
+async-signal = "0.2.13"
+async-stream = "0.3.6"
+async-tar = "0.5.0"
+async-trait = "0.1.89"
+asynchronous-codec = { version = "0.7.0", features = ["cbor"] }
+atomic_enum = "0.3.0"
+axum = { version = "0.8.4", features = ["ws", "http2"] }
+axum-extra = { version = "0.10.1", features = ["query"] }
+backon = { version = "1.5.2", default-features = false }
+base64 = "0.22.1"
+bigdecimal = "0.4.8"
+bimap = "0.6.3"
+bincode = { version = "2.0.1", features = ["serde"] }
+bitvec = "1.0.1"
+bloomfilter = { version = "3.0.1", features = ["serde"] }
+bytesize = { version = "2.0.1", features = ["serde"] }
+bytes = "1.10.1"
+cfg_eval = "0.1.2"
+cfg-if = "1.0.3"
+chrono = { version = "0.4.42", default-features = false }
+clap = { version = "4.5.48", features = ["derive", "env", "string"] }
+const_format = "0.2.34"
+console-subscriber = "0.4.1"
+criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
+ctr = "0.9.2"
+curve25519-dalek = { version = "4.1.3", features = ["rand_core"] }
+dashmap = "6.1.0"
+env_logger = "0.11.8"
+either = "1.15.0"
+flagset = "0.4.7"
+flate2 = "1.1.2"
+flume = "0.11.1"
+float-cmp = "0.10.0"
+futures = "0.3.31"
+futures-concurrency = "7.6.3"
+futures-timer = "3.0.3"
+futures-time = "3.0.0"
+futures-util = "0.3"
+generic-array = "1.2.0"
+hashbrown = "0.16.0"
 hex = "0.4.3"
-js-sys = "0.3.64"
-gloo-timers = { version = "0.3.0", features = ["futures"] }
-lazy_static = "1.4.0"
-libp2p-identity = { version = "0.2.3", features = ["peerid", "ed25519"] }
-libp2p-mplex = { git = "https://github.com/hoprnet/rust-libp2p.git", branch = "release/providence-update-20230828" }
-libp2p-wasm-ext = { git = "https://github.com/hoprnet/rust-libp2p.git", branch = "release/providence-update-20230828" }
-libp2p = { git = "https://github.com/hoprnet/rust-libp2p.git", branch = "release/providence-update-20230828" }
-multiaddr = "0.18.0"
-rust-stream-ext-concurrent = { git = "https://github.com/hoprnet/rust-stream-ext-concurrent.git", branch = "main"}
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_with = { version = "3.3" }
-serde-wasm-bindgen = { version = "0.6" }
-thiserror = "1.0"
-validator = { version = "0.16.1", features = ["derive"] }
-wasm-pack = "0.12.0"
-wasm-opt = "0.112.0"
-wasm-bindgen = "0.2.86"
-wasm-bindgen-futures = "0.4.36"
+hex-literal = "1.0.0"
+hickory-resolver = "0.25.2"
+http = "1.3.1"
+human-bandwidth = { version = "0.1.4", features = ["serde"] }
+k256 = { version = "0.13.4", features = [
+  "arithmetic",
+  "ecdh",
+  "hash2curve",
+  "serde",
+] }
+lazy_static = "1.5.0"
+libp2p = { version = "0.56.0" }
+libp2p-identity = { version = "0.2.12", features = [
+  "peerid",
+  "ed25519",
+  "rand",
+] }
+libp2p-stream = { version = "0.4.0-alpha" }
+mockall = "0.13.1"
+mockito = "1.7.0"
+moka = { version = "0.12.11", features = ["future"] }
+more-asserts = "0.3.1"
+multiaddr = "0.18.2"
+num_enum = "0.7.4"
+opentelemetry = { version = "0.30.0" }
+opentelemetry-otlp = { version = "0.30.0", default-features = false }
+opentelemetry_sdk = { version = "0.30.0" }
+tracing-opentelemetry = { version = "0.31.0" }
+temp-env = "0.3.6"
+parameterized = "2.0.0"
+parking_lot = "0.12.4"
+pcap-file = "2.0.0"
+petgraph = { version = "0.8.2", features = ["serde-1"] }
+pid = "4.0.0"
+pin-project = "1.1.10"
+primitive-types = { version = "0.14.0", features = ["serde"] }
+proc-macro-regex = "~1.1.0"
+prometheus = "0.14.0"
+rand = "0.8.5" # ignored in renovate, cannot be updated, dependencies reference old ones
+rayon = "1.11.0"
+regex = "1.11.3"
+reqwest = { version = "0.12.23", features = ["json"] }
+ringbuffer = "0.16.0"
+rpassword = "7.4.0"
+rust-stream-ext-concurrent = "1.0.0"
+scrypt = { version = "0.11.0", default-features = false }
+sea-orm = { version = "1.1.16", default-features = false, features = [
+  "sqlx-sqlite",
+  "with-chrono",
+  "with-json",
+  "debug-print",
+] }
+sea-orm-cli = { version = "1.1.16", default-features = false, features = [
+  "codegen",
+] }
+sea-orm-migration = { version = "1.1.16", default-features = false, features = [
+  "cli",
+  "sqlx-sqlite",
+  "with-chrono",
+] }
+sea-query = { version = "0.32.7", default-features = false }
+sea-query-binder = { version = "0.7.0", default-features = false, features = [
+  "with-chrono",
+  "sqlx-sqlite",
+] }
+semver = "1.0.27"
+serde = { version = "1.0.227", features = ["derive"] }
+serde_bytes = "0.11.19"
+serde_cbor_2 = "0.13.0"
+serde_json = "1.0.145"
+serde_repr = "0.1.20"
+serde_with = { version = "3.14.1", features = ["base64"] }
+serde_yaml = { version = "0.9.33" } # using last version before the library was deprecated
+serial_test = "3.2.0"
+sha3 = "0.10.8"
+signal-hook = "0.3.18"
+smart-default = "0.7.1"
+socket2 = "0.6.0"
+sqlx = { version = "0.8.6", default-features = false, features = [
+  "sqlite",
+  "macros",
+  "migrate",
+] }
+strum = { version = "0.27.2", features = ["derive"] }
+subtle = "2.6.1"
+sysinfo = "0.37"
+tempfile = "3.23.0"
+test-log = { version = "0.2.18", features = ["trace"] }
+thiserror = "2.0.16"
+tokio = { version = "1.47.1", features = [
+  "rt-multi-thread",
+  "macros",
+  "tracing",
+] }
+tokio-util = { version = "0.7.16", default-features = false, features = [
+  "codec",
+  "compat",
+] }
+tokio-retry = "0.3.0"
+tokio-stream = { version = "0.1.17", features = ["net"] }
+tower-http = { version = "0.6.6", features = [
+  "validate-request",
+  "compression-full",
+  "cors",
+  "trace",
+  "sensitive-headers",
+] }
+tower = { version = "0.5.2", default-features = false, features = ["util"] }
+oas3 = "0.19.0"
+urlencoding = "2.1.3"
+utoipa = { version = "5.4.0" }
+utoipa-scalar = { version = "0.3.0", features = ["axum"] }
+utoipa-swagger-ui = { version = "9.0.2", features = [
+  "axum",
+  "vendored",
+  "debug-embed",
+] }
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.20", features = [
+  "env-filter",
+  "fmt",
+  "registry",
+  "std",
+] }
+tracing-test = { version = "0.2.5", features = ["no-env-filter"] }
+typenum = "1.18.0"
+uuid = { version = "1.18.1" }
+url = { version = "2.5.7", features = ["serde"] }
+validator = { version = "0.20.0", features = ["derive"] }
+vergen-gix = { version = "1.0.9", features = ["build"] }
+tikv-jemallocator = "0.6.0"
 
-bindings = { path = "packages/ethereum/crates/bindings", default-features = false }
-core-ethereum-actions = { path = "packages/core-ethereum/crates/core-ethereum-actions", default-features = false }
-core-ethereum-api = { path = "packages/core-ethereum/crates/core-ethereum-api", default-features = false }
-core-ethereum-db = { path = "packages/core-ethereum/crates/core-ethereum-db", default-features = false }
-core-ethereum-rpc = { path = "packages/core-ethereum/crates/core-ethereum-rpc", default-features = false }
-core-ethereum-types = { path = "packages/core-ethereum/crates/core-ethereum-types", default-features = false }
-core-ethereum-indexer = { path = "packages/core-ethereum/crates/core-ethereum-indexer", default-features = false }
-core-crypto = { path = "packages/core/crates/core-crypto", default-features = false }
-core-misc = { path = "packages/core/crates/core-misc", default-features = false }
-core-network = { path = "packages/core/crates/core-network", default-features = false }
-core-packet = { path = "packages/core/crates/core-packet", default-features = false }
-core-path = { path = "packages/core/crates/core-path", default-features = false }
-core-protocol = { path = "packages/core/crates/core-protocol", default-features = false }
-core-p2p = { path = "packages/core/crates/core-p2p", default-features = false }
-core-strategy = { path = "packages/core/crates/core-strategy", default-features = false }
-core-transport = { path = "packages/core/crates/core-transport", default-features = false }
-core-types = { path = "packages/core/crates/core-types", default-features = false }
-hopr-lib = { path = "packages/hoprd/crates/hopr-lib", default-features = false }
-hoprd-inbox = { path = "packages/hoprd/crates/hoprd-inbox", default-features = false }
-hoprd-keypair = { path = "packages/hoprd/crates/hoprd-keypair", default-features = false }
-real-base = { path = "packages/real/crates/real-base", default-features = false }
-utils-db = { path = "packages/utils/crates/utils-db", default-features = false }
-utils-log = { path = "packages/utils/crates/utils-log", default-features = false }
-utils-misc = { path = "packages/utils/crates/utils-misc", default-features = false}
-utils-metrics = { path = "packages/utils/crates/utils-metrics", default-features = false }
-utils-types = { path = "packages/utils/crates/utils-types", default-features = false }
-utils-validation = { path = "packages/utils/crates/utils-validation", default-features = false }
+hopr-api = { path = "common/api" }
+hopr-async-runtime = { path = "common/async-runtime" }
+hopr-bindings = { path = "ethereum/bindings", default-features = false }
+hopr-chain-actions = { path = "chain/actions", default-features = false }
+hopr-chain-api = { path = "chain/api", default-features = false }
+hopr-chain-indexer = { path = "chain/indexer", default-features = false }
+hopr-chain-rpc = { path = "chain/rpc", default-features = false }
+hopr-chain-types = { path = "chain/types", default-features = false }
+hopr-crypto-keypair = { path = "crypto/keypair", default-features = false }
+hopr-crypto-packet = { path = "crypto/packet", default-features = false }
+hopr-crypto-random = { path = "crypto/random", default-features = false }
+hopr-crypto-sphinx = { path = "crypto/sphinx", default-features = false, features = [
+  "x25519",
+  "ed25519",
+] }
+hopr-crypto-types = { path = "crypto/types", default-features = false }
+hopr-db-api = { path = "db/api" }
+hopr-db-entity = { path = "db/entity" }
+hopr-db-migration = { path = "db/migration" }
+hopr-db-sql = { path = "db/sql" }
+hopr-internal-types = { path = "common/internal-types", default-features = false }
+hopr-chain-config = { path = "hopr/chain-config", default-features = false }
+hopr-lib = { path = "hopr/hopr-lib", default-features = false }
+hopr-metrics = { path = "misc/metrics", default-features = false }
+hopr-network-types = { path = "common/network-types", default-features = false }
+hopr-path = { path = "logic/path" }
+hopr-parallelize = { path = "common/parallelize" }
+hopr-platform = { path = "misc/platform" }
+hopr-primitive-types = { path = "common/primitive-types", default-features = false }
+hopr-protocol-app = { path = "protocols/app" }
+hopr-protocol-session = { path = "protocols/session" }
+hopr-protocol-start = { path = "protocols/start" }
+hopr-strategy = { path = "logic/strategy", default-features = false }
+hopr-transport = { path = "transport/api" }
+hopr-transport-bloom = { path = "transport/bloom" }
+hopr-transport-identity = { path = "transport/identity" }
+hopr-transport-network = { path = "transport/network" }
+hopr-transport-mixer = { path = "transport/mixer" }
+hopr-transport-probe = { path = "transport/probe" }
+hopr-transport-protocol = { path = "transport/protocol" }
+hopr-transport-p2p = { path = "transport/p2p" }
+hopr-transport-session = { path = "transport/session" }
+hopr-transport-ticket-aggregation = { path = "transport/ticket-aggregation" } # dead package waiting for reimplementation as a session protocol
+hoprd-api = { path = "hoprd/rest-api", default-features = false }
 
+[profile.dev]
+panic = "abort"
+
+# this profile focuses on the speed of compilation
+[profile.candidate]
+inherits = "release"
+codegen-units = 16   # normal release default
+lto = false          # do the smallest amount of link-time optimization
+panic = "abort"
+strip = true
+opt-level = 2
+
+# perform minimal optimizations to prevent stack overflows in large tests
+[profile.test]
+opt-level = 1
+
+# this profile focuses on the best runtime performance and the smallest binary size
 [profile.release]
-opt-level = "s"     # optimize for small code size
-#debug=true
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+strip = true
+opt-level = 3
+
+# uses extended debug symbols for profiling but does not harm benchmarking performance
+[profile.bench]
+debug = 2
+split-debuginfo = "off"
+strip = false

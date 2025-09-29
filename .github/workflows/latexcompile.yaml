@@ -14,27 +14,36 @@ on:
       - 'docs/yellowpaper/**'
       - '.github/workflows/latexcompile.yaml'
 
+permissions:
+  contents: read
+
 jobs:
   build_latex:
-    runs-on: ubuntu-2-core
+    runs-on: self-hosted-hoprnet-small
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          disable-sudo: true
+          egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
       - name: Set up Git repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Configure Git info
         run: ./scripts/configure-git-info.sh
 
       - name: Install dependencies
         run: >
-          sudo apt -y install
-          texlive texlive-latex-extra texlive-science
-          texlive-bibtex-extra latexmk
-
+          sudo apt -y install texlive texlive-latex-extra texlive-science texlive-bibtex-extra latexmk #magic___^_^___line
       - name: Compile LaTeX document
         run: make -j build-yellowpaper
 
       - name: Commit & Push changes
-        run: ./scripts/commit-and-push-all-changes.sh
-        env:
-          HOPR_GIT_MSG: 'chore(build): update yellowpaper'
-          HOPR_GITHUB_REF: ${{ github.ref }}
+        uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
+        with:
+          new_branch: ${{ github.ref }}
+          message: 'chore(build): update yellowpaper'
+          pathspec_error_handling: exitImmediately

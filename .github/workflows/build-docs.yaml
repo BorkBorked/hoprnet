@@ -1,66 +1,79 @@
 ---
 #################################################################################
-# Build and publish rust documentation 
+# Build and publish rust documentation
 #################################################################################
 name: "Build docs"
 
+env:
+  needs_nix_setup: false
+
 # yamllint disable-line rule:truthy
 on:
-  push:
-    branches:
-      - master
-  workflow_dispatch:
   workflow_call:
+    inputs:
+      source_repo:
+        required: true
+        type: string
+      source_branch:
+        required: true
+        type: string
+      publish:
+        required: true
+        type: boolean
+        description: 'Publish the docs'
 
 concurrency:
-  group: ${{ github.head_ref }}-docs
+  group: ${{ inputs.source_branch || github.ref_name }}-docs
   cancel-in-progress: true
+
+permissions:
+  contents: write # for peaceiris/actions-gh-pages to push pages branch
 
 jobs:
   rust:
-    name: Rust docs
-    runs-on: ubuntu-latest
+    name: Rust
+    # big runner is needed because building docs involves building Rust code
+    runs-on: self-hosted-hoprnet-bigger
+    timeout-minutes: 60
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          disable-sudo: true
+          egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.source_repo }}
+          ref: ${{ inputs.source_branch }}
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v24
+        if: env.needs_nix_setup == true
+        uses: cachix/install-nix-action@7be5dee1421f63d07e71ce6e0a9f8a4b07c2a487 # v31
         with:
-          extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: cachix/cachix-action@v13
-        if: ${{ !env.ACT }}
+      - uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        if: env.needs_nix_setup == true
         with:
           name: hoprnet
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        continue-on-error: true
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+        env:
+          USER: runner
 
-      - name: restore cargo cache
-        uses: actions/cache@v3
-        with:
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-            .cargo/.package-cache/
-            .foundry/bin/
+      - name: Build docs
+        run: nix build -L .#docs
 
-      - name: Generate rust docs
-        uses: workflow/nix-shell-action@v3.3.0
-        with:
-          flakes-from-devshell: true
-          script: |
-            cargo doc --no-deps
+      - name: Increase git buffer size
+        if: inputs.publish
+        run: git config --global http.postBuffer 524288000
 
       - name: Deploy
-        if: github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v3
+        if: inputs.publish
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc/
+          publish_dir: ./result/share/doc/
           force_orphan: true

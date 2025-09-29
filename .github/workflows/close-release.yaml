@@ -11,7 +11,7 @@ on:
       next_release_type:
         type: choice
         required: true
-        description: 'Next release type to create'
+        description: "Next release type to create"
         options:
           - ReleaseCandidate
           - Patch
@@ -20,11 +20,11 @@ on:
       release_name:
         type: choice
         required: true
-        description: 'Name of the release'
+        description: "Name of the release"
         options:
-          - providence
-          - saint-louis
-          - singapore
+          - kaunas
+          - altea
+          - edinburgh
 concurrency:
   group: close-release
   cancel-in-progress: true
@@ -32,62 +32,31 @@ concurrency:
 jobs:
   close-release:
     name: Close Release
-    runs-on: ubuntu-2-core
+    runs-on: self-hosted-hoprnet-small
     steps:
-      - name: Checkout hoprnet repository
-        uses: actions/checkout@v4
-
-      - name: Disable sccache (act-only)
-        if: ${{ env.ACT }}
-        run: |
-          echo "SCCACHE_GHA_ENABLED=false" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=" >> $GITHUB_ENV
-
-      - name: Sccache Setup
-        if: ${{ !env.ACT }}
-        uses: mozilla-actions/sccache-action@v0.0.3
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
         with:
-          version: "v0.4.0"
+          disable-sudo: true
+          egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
+      - name: Checkout hoprnet repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v24
+        uses: cachix/install-nix-action@7be5dee1421f63d07e71ce6e0a9f8a4b07c2a487 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
         if: ${{ !env.ACT }}
         with:
           name: hoprnet
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        continue-on-error: true
-
-      - name: get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "dir=$(pwd)/.yarn/cache" >> $GITHUB_OUTPUT
-
-      - name: restore yarn cache
-        uses: actions/cache@v3
-        id: yarn-cache
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-
-      - name: restore cargo cache
-        uses: actions/cache@v3
-        with:
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-            .cargo/.package-cache/
-
-      - name: Install dependencies
-        run: nix develop -c make -j deps-ci
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+        env:
+          USER: runner
 
       - name: Generate Changelog
         id: template
@@ -101,34 +70,31 @@ jobs:
           else
             echo "pr_template=pr-close-patch.md" >> $GITHUB_OUTPUT
           fi
-          milestone_number=$(gh api repos/${{ github.repository }}/milestones | jq -r --arg version "${current_version}"  ' to_entries[] | select(.value.title | test($version)).value.number')
-          ./scripts/generate-changelog.sh ${milestone_number} > docs/changelog/changelog-${current_version}.md
-          nix develop -c make fmt-ts
+          ./scripts/generate-changelog.sh ${current_version} github > docs/changelog/changelog-${current_version}.md
           cat docs/changelog/changelog-${current_version}.md
-
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         with:
-            token: ${{ secrets.GH_RUNNER_TOKEN }}
-            commit-message: "Close release ${{ steps.template.outputs.current_version }}"
-            title: "Close release ${{ steps.template.outputs.current_version }}"
-            body-path: .github/files/${{ steps.template.outputs.pr_template }}
-            branch: bot/close-${{ steps.template.outputs.current_version }}
-            delete-branch: true
-            labels: release
-            draft: true
-            assignees: ${{ github.actor }}
-            team-reviewers: "@hoprnet/hopr-development"
+          token: ${{ secrets.GH_RUNNER_TOKEN }}
+          commit-message: "Close release ${{ steps.template.outputs.current_version }}"
+          title: "build: Close release ${{ steps.template.outputs.current_version }}"
+          body-path: .github/files/${{ steps.template.outputs.pr_template }}
+          branch: bot/close-${{ steps.template.outputs.current_version }}
+          delete-branch: true
+          labels: release,binary:x86_64-linux,binary:aarch64-linux,binary:aarch64-darwin,binary:x86_64-darwin
+          draft: true
+          assignees: ${{ github.actor }}
+          team-reviewers: "@hoprnet/hopr-development"
 
       - name: Enable Auto Merge
         run: |
-            git fetch
-            git checkout bot/close-${{ steps.template.outputs.current_version }}
-            gh pr ready
-            gh pr merge --auto --delete-branch --squash
+          git fetch
+          git checkout bot/close-${{ steps.template.outputs.current_version }}
+          gh pr edit --add-reviewer "hoprnet/hopr-development"
+          gh pr ready
         env:
           GH_TOKEN: ${{ secrets.GH_RUNNER_TOKEN }}
 

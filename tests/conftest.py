@@ -1,171 +1,133 @@
+import asyncio
 import logging
 import os
-import random
-import shutil
-import subprocess
+import re
+from subprocess import PIPE, STDOUT, CalledProcessError, Popen
 
 import pytest
 
-from hopr import HoprdAPI
+from sdk.python import localcluster
+from sdk.python.localcluster.constants import PWD
+from sdk.python.localcluster.node import Node
 
-random_data = os.urandom(8)
-SEED = int.from_bytes(random_data, byteorder="big")
-random.seed(SEED)
+from .find_port import find_available_port_block
 
-LOCALHOST = "127.0.0.1"
-OPEN_CHANNEL_FUNDING_VALUE = "1000000000000000000000"
-
-TICKET_AGGREGATION_THRESHOLD = 100
-TICKET_PRICE_PER_HOP = 100
+# prepend the timestamp in front of any log line
+logging.basicConfig(format="%(asctime)s %(message)s")
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
-        "--stress-seq-request-count",
+        "--stress-request-count",
         action="store",
-        default=200,
-        help="Number of sequential requests in the stress test",
+        default=1000,
+        type=int,
+        help="Number of requests performed by each source node towards the stressed target",
     )
     parser.addoption(
-        "--stress-par-request-count", action="store", default=200, help="Number of parallel requests in the stress test"
-    )
-    parser.addoption(
-        "--stress-tested-api",
+        "--stress-sources",
         action="store",
-        default=f"http://{LOCALHOST}:{NODES['1']['api_port']}",
-        help="The API towards which the stress test is performed",
+        type=str,
+        help="""The JSON string containing the list of dicts with 'url' and 'token' keys for each
+        stress test source node""",
     )
     parser.addoption(
-        "--stress-tested-api-token",
+        "--stress-target",
         action="store",
-        default=DEFAULT_API_TOKEN,
-        help="The token for the stress tested API",
-    )
-    parser.addoption(
-        "--stress-minimum-peer-count", action="store", default=3, help="The minimum peer count to start the stress test"
+        type=str,
+        help="""The JSON string containing the dict with 'url' and 'token' keys for the stressed
+        target node""",
     )
 
 
-@pytest.fixture
-def cmd_line_args(request):
-    args = {
-        "stress_seq_request_count": request.config.getoption("--stress-seq-request-count"),
-        "stress_par_request_count": request.config.getoption("--stress-par-request-count"),
-        "stress_tested_api": request.config.getoption("--stress-tested-api"),
-        "stress_tested_api_token": request.config.getoption("--stress-tested-api-token"),
-        "stress_minimum_peer_count": request.config.getoption("--stress-minimum-peer-count"),
-    }
-
-    return args
+# the test framework uses the following folder structure:
+#
+# /tmp/hopr-smoke-test/ - parent directory for all test related files
+# /tmp/hopr-smoke-test/snapshot/ - directory for snapshot files which can be re-used
+# /tmp/hopr-smoke-test/${SUITE_NAME}/ - directory for a specific test suite
+# /tmp/hopr-smoke-test/${SUITE_NAME}/hopr-node_*.id - identity file for nodes
+# /tmp/hopr-smoke-test/${SUITE_NAME}/hopr-node_*.log - log file for nodes
+# /tmp/hopr-smoke-test/${SUITE_NAME}/anvil.cfg - anvil configuration file
+# /tmp/hopr-smoke-test/${SUITE_NAME}/anvil.log - anvil configuration file
 
 
-FIXTURE_FILES_DIR = "/tmp/"
-FIXTURE_FILES_PREFIX = "hopr-smoke-test"
+def barebone_nodes():
+    """Nodes using only the barebones config without any strategies"""
+    return ["1", "2", "3", "4"]
 
 
-DEFAULT_API_TOKEN = "e2e-API-token^^"
-PASSWORD = "e2e-test"
-NODES = {
-    "1": {
-        "p2p_port": 19091,
-        "api_port": 13301,
-        "peer_id": "12D3KooWKSzQgdszZzipRVGSRwBcC3etYwjSmqqTqcySn97EGWTm",
-        "address": "0x7d1e530e9c82c21b75644a2c23402aa858ae4a69",
-    },
-    "2": {
-        "p2p_port": 19092,
-        "api_port": 13302,
-        "peer_id": "12D3KooWLWoHJjaS1z9cXn19DE9gPrSbYHkf7CHMbUtLUqbZKDby",
-        "address": "0x1b482420afa04aec1ef0e4a00c18451e84466c75",
-    },
-    "3": {
-        "p2p_port": 19093,
-        "api_port": 13303,
-        "peer_id": "12D3KooWJ4E4q6wr8nzXyRKnAofQSeoGoRFRRtQJK3jCpLtLNVZj",
-        "address": "0x05b17e37fd43c18741877fca80846ad8c84aa750",
-    },
-    "4": {
-        "p2p_port": 19094,
-        "api_port": 13304,
-        "peer_id": "12D3KooWA494BRhXs2DpMm5e2DWkPZcot3WpYwB4KBj2udP9xvPC",
-        "address": "0xcc70a22331998454160472f097acb43ca9b1e646",
-    },
-    "5": {
-        "p2p_port": 19095,
-        "api_port": 13305,
-        "peer_id": "12D3KooWQCHVYhdnLT76rhHoFUu3b4L2aUiY8o1y8erhAwg8evFx",
-        "address": "0xe4bb1970e6c9e5689c5ef68ee2545b4366c49be4",
-    },
-    "6": {
-        "p2p_port": 19096,
-        "api_port": 13306,
-        "peer_id": "12D3KooWHc2LPyvYGLJbHoQeJUBXBjDRfMY7msobsPoWj8rCAGHr",
-        "address": "0xf90c1eb2557a443c2b27d399afac075fa752cd92",
-    },
-    "7": {
-        "p2p_port": 19097,
-        "api_port": 13307,
-        "peer_id": "12D3KooWGPUAcSaJhKBmmwP2Bz3PbZyrErosBmCbZKgPPt7XHwqh",
-        "address": "0xe63ececd80c503548516e9e23ebb44d95c4d5ac2",
-    },
-}
+def nodes_with_auth():
+    """All nodes within the same network as specified in the swarm7 fixture"""
+    return ["1", "3", "4"]
 
 
-def setup_node(*args, **kwargs):
-    logging.info(f"Setting up a node with configuration: {args} and {kwargs}")
-    pass
+def default_nodes():
+    """A node that uses the default strategies"""
+    return ["5"]
 
 
-def test_sanity():
-    assert len(NODES.keys()) == len(set([i["api_port"] for i in NODES.values()])), "All API ports must be unique"
+def nodes_with_lower_outgoing_win_prob():
+    """Nodes with outgoing ticket winning probability"""
+    return ["6"]
 
-    assert len(NODES.keys()) == len(set([i["p2p_port"] for i in NODES.values()])), "All p2p ports must be unique"
+
+@pytest.fixture(scope="session")
+async def base_port(request):
+    base_port_env = os.environ.get("HOPR_SMOKETEST_BASE_PORT")
+
+    if base_port_env is None:
+        base_port = find_available_port_block(3000, 4000, 30)
+    else:
+        base_port = int(base_port_env)
+
+    if base_port is None:
+        pytest.fail("No available base port found")  # ty: ignore[call-non-callable]
+    logging.info(f"Using base port: {base_port}")
+    yield base_port
 
 
-def check_socket(address, port):
-    import socket
-
-    s = socket.socket()
+@pytest.fixture(scope="session")
+async def swarm7(request, base_port):
+    params_path = PWD.joinpath("sdk/python/localcluster.test.params.yml")
     try:
-        s.connect((address, port))
-        return True
-    except Exception:
-        return False
-    finally:
-        s.close()
+        cluster_and_anvil = await localcluster.bringup(
+            params_path, test_mode=True, fully_connected=False, use_nat=False, base_port=base_port
+        )
+
+        assert cluster_and_anvil is not None, "Failed to bring up the cluster"
+
+        cluster, anvil = cluster_and_anvil
+        yield cluster.nodes
+
+        cluster.clean_up()
+        anvil.kill()
+    except RuntimeError:
+        pytest.fail("Failed to bring up the cluster")  # ty: ignore[call-non-callable]
 
 
-@pytest.fixture(scope="module")
-def swarm7(request):
-    logging.info(f"Using the random seed: {SEED}")
+@pytest.fixture(scope="function")
+async def swarm7_reset(swarm7: dict[str, Node]):
+    yield
 
-    log_file_path = f"/tmp/hopr-smoke-{request.module.__name__}-setup.log"
-
-    for f in ["node_5.cfg.yaml"]:
-        shutil.copyfile(f"./tests/{f}", f"{FIXTURE_FILES_DIR}/{FIXTURE_FILES_PREFIX}-{f}")
-
+    logging.debug("Resetting swarm7 nodes")
     try:
-        logging.debug("Creating a 7 node cluster from bash")
-        res = subprocess.run(
-            f"./scripts/fixture_local_test_setup.sh --setup 2>&1 | tee {log_file_path}",
-            shell=True,
-            capture_output=True,
-            check=True,
-        )
-        res.check_returncode()
-        nodes = NODES.copy()
-        for key in NODES.keys():
-            port = NODES[key]["api_port"]
-            nodes[key]["api"] = HoprdAPI(f"http://localhost:{port}", DEFAULT_API_TOKEN)
-        yield nodes
-    except Exception:
-        logging.error("Creating a 7 node cluster from bash - FAILED")
-    finally:
-        logging.debug("Tearing down the 7 node cluster from bash")
-        subprocess.run(
-            f"./scripts/fixture_local_test_setup.sh --teardown 2>&1 | tee --append {log_file_path}",
-            shell=True,
-            capture_output=True,
-            check=False,
-        )
-        pass
+        await asyncio.gather(*[node.api.reset_tickets_statistics() for node in swarm7.values()])
+    except Exception as e:
+        logging.error(f"Error resetting tickets statistics in teardown: {e}")
+
+
+def to_ws_url(host, port, args: list[tuple[str, str]]):
+    return f"ws://{host}:{port}/api/v4/session/websocket?" + "&".join(f"{a[0]}={a[1]}" for a in args)
+
+
+def run_hopli_cmd(cmd: list[str], custom_env):
+    env = os.environ | custom_env
+    proc = Popen(cmd, env=env, stdout=PIPE, stderr=STDOUT, bufsize=0, cwd=PWD)
+    # filter out ansi color codes
+    color_regex = re.compile(r"\x1b\[\d{,3}m")
+    with proc.stdout:  # ty: ignore[invalid-context-manager]
+        for line in iter(proc.stdout.readline, b""):  # ty: ignore[possibly-unbound-attribute]
+            logging.debug("[Hopli] %r", color_regex.sub("", line.decode("utf-8")[:-1]))
+    retcode = proc.wait()
+    if retcode:
+        raise CalledProcessError(retcode, cmd)

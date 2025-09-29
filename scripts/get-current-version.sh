@@ -13,17 +13,19 @@ usage() {
 }
 
 # return early with help info when requested
-{ [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; } && { usage; exit 0; }
+{ [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; } && {
+  usage
+  exit 0
+}
 
 # set mydir
 declare mydir
 mydir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
-version_type=${1} # Can be any of these values Build | ReleaseCandidate | Patch | Minor | Major
-current_version=$(sed -n "s/^version = //p" ${mydir}/../packages/hoprd/crates/hopr-lib/Cargo.toml | tr -d '"')
+version_type=${1:-semver}
+current_version=$(grep -E '^version\s*=' ${mydir}/../hopr/hopr-lib/Cargo.toml | awk -F\" '{print $2}')
 
-if [ "${version_type}" == "docker" ] 
-then
+if [ "${version_type}" == "docker" ]; then
   echo ${current_version}
 else
   echo $(echo ${current_version} | sed 's/+/-/')

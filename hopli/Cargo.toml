@@ -1,0 +1,48 @@
+[package]
+name = "hopli"
+version = "0.8.1"
+edition = "2021"
+license = "GPL-3.0-only"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+alloy = { workspace = true, default-features = false, features = [
+  "essentials",
+  "json-rpc",
+  "node-bindings",
+] }
+# using own fork until the PR was merged
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
+hex-literal = { workspace = true }
+rpassword = { workspace = true }
+url = { workspace = true }
+
+hopr-bindings = { workspace = true }
+hopr-chain-api = { workspace = true, features = ["runtime-tokio"] }
+hopr-chain-types = { workspace = true }
+hopr-chain-rpc = { workspace = true }
+hopr-crypto-keypair = { workspace = true, features = ["to-file"] }
+hopr-crypto-types = { workspace = true }
+hopr-internal-types = { workspace = true }
+hopr-primitive-types = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+tempfile = { workspace = true }
+env_logger = { workspace = true }
+
+hopr-crypto-random = { workspace = true }
+
+# Target-specific dependencies for memory allocators
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemallocator = "0.6.0"

@@ -2,24 +2,24 @@
 
 The purpose of this document is to streamline the releases of hoprd.
 
-- [Release Types](#types-of-release)
-  - [Internal release](#internal-release)
-  - [Public release](#public-release)
-  - [Deadline based releases](#deadline-based-releases)
-- [Testing phases](#testing-phases)
-  - [Pre-release testing](#pre-release-testing)
-  - [Release testing](#release-testing)
-  - [Promotion testing](#promotion-testing)
-  - [User acceptance testing](#user-acceptance-testing)
-- [Release promotion](#release-promotion)
-- [On a new chain](#on-a-new-chain)
-- [On a new release](#on-a-new-release)
-  - [Release Cycle](#release-cycle)
-  - [Close Release](#close-release)
-  - [Publish dappNode](#publish-dappnode)
-  - [Promote release](#promote-release)
-  - [Create Patch](#create-patch)
-  - [Merge Back](#merge-back)
+- [Release Processs](#release-processs)
+  - [Release Types](#release-types)
+    - [Internal release](#internal-release)
+    - [Public release](#public-release)
+    - [Deadline based releases](#deadline-based-releases)
+  - [Testing phases](#testing-phases)
+    - [Pre-release testing](#pre-release-testing)
+    - [Release testing](#release-testing)
+    - [Promotion testing](#promotion-testing)
+    - [User acceptance testing](#user-acceptance-testing)
+  - [Release promotion](#release-promotion)
+  - [On a new chain](#on-a-new-chain)
+  - [On a new release](#on-a-new-release)
+    - [Release Cycle](#release-cycle)
+    - [Close release](#close-release)
+    - [Publish DappNode](#publish-dappnode)
+      - [Prerequisites](#prerequisites)
+    - [Promote release](#promote-release)
 
 ## Release Types
 
@@ -61,6 +61,21 @@ These are the keypoints of this testing phase:
 - During the online testing sesion, the Core team executes a manual regresion suite of test cases.
 - Depending on the results of the session, a decission is taken to release the code as it is or not.
 - In case some blocking bugs are found, the Core team should adapt the sprint plan and include them. A new pre-release testing session must be needed once they are fixed
+
+### Load Testing
+
+Load testing can be initiated manually by any team member to gather results based on specific parameters of the application or initiated as part of gathering the performance results of a new release, which is initiated when the `Close Release` pull request is merged. Below is described the procedure to execute load testing as part of **Closing the release**
+
+- Check that when the `Close release` PR is merged, a new workflow action is launched in the [K6 load tests](https://github.com/hoprnet/hoprnet/actions/workflows/load-tests.yaml)
+- Check in [Grafana](https://grafana.staging.hoprnet.link/d/load-tests-results/k6-load-tests-results?orgId=1) the progress of the load testing execution
+- The acceptance criteria to considering the test execution as valid are:
+  - The nodes were warm-up and there were no high response times during the first minutes of execution
+  - The expected throughput has been achieved during the workload. The throughtput in manual execution is set in the parameter `Number of messages per seconds`. And in the automatic execution is determined by the [LOAD_TESTING_RATE](https://github.com/hoprnet/hoprnet/settings/variables/actions) repository variable which currently is 300 messages per second per node. The achieved throughtput can be shown in this [grafana panel](https://grafana.staging.hoprnet.link/d/load-tests-results/k6-load-tests-results?orgId=1&viewPanel=126)
+- Once the execution is finished check that results are stored in the [K6 bucket](https://console.cloud.google.com/storage/browser/hoprnet-k6-staging/core-team;tab=objects?hl=en&project=hopr-staging&prefix=&forceOnObjectsSortingFiltering=false)
+- Update the [Load testing](https://docs.google.com/spreadsheets/d/1ose_1SN-7HlkkaQ1_wQjwq4vvphMz5vAAYOsm_cDTb4/edit?usp=sharing) sheet with the new results
+  - Create a new tab by cloning an existing tab with results.
+  - Rename the tag with a scenario name
+  - Update the summary tab with a new entry for the new execution. Update the column A only with the name of the new tab name created before.
 
 ### Release testing
 
@@ -122,29 +137,29 @@ particular branch to deploy on every change.
 ### Release Cycle
 
 ```
-   hotfix/bug-2         hotfix/bug-1         release/providence           master
+   hotfix/bug-2         hotfix/bug-1         release/saint-louis           master
 
-         x                   x                       x  create new release     x
-         x                   x                       x◄─────────────────────   x 2.0.0
-         x                   x   start hotfix bug-1  x 2.0.0-rc1 / providence  x 2.0.1
-         x                   x ◄─────────────────────│                         x
-         x                   │                       │                         x
-         x                   │   hotfix merge  1     │  backport pr bug-1      x
-         x                   ▼ ─────────────────────►x ──────────────────►     x
-         x                   x                       │                         x
-         x  start fix bug-2  x                       │                         x
-         x◄──────────────────x───────────────────────│                         x
-         │                   x                       │                         x
-         │  hotfix merge 2   x                       │  backport pr bug-1      x
-         ▼───────────────────x──────────────────────►│ ───────────────────►    x
-         x                   x                       │                         x
-         x                   x                       │                         x
-         x                   x                       │                         x
-         x                   x                       x 2.0.0-rc2/providence    x
-         x                   x                       │                         x
-         x                   x                       │                         x
-         x                   x                       │                         x
-         x                   x                       │                         x
+         x                   x                       x  create new release      x
+         x                   x                       x◄─────────────────────    x 2.1.0
+         x                   x   start hotfix bug-1  x 2.1.0-rc1 / saint-louis  x 2.1.1
+         x                   x ◄─────────────────────│                          x
+         x                   │                       │                          x
+         x                   │   hotfix merge  1     │  backport pr bug-1       x
+         x                   ▼ ─────────────────────►x ──────────────────►      x
+         x                   x                       │                          x
+         x  start fix bug-2  x                       │                          x
+         x◄──────────────────x───────────────────────│                          x
+         │                   x                       │                          x
+         │  hotfix merge 2   x                       │  backport pr bug-1       x
+         ▼───────────────────x──────────────────────►│ ───────────────────►     x
+         x                   x                       │                          x
+         x                   x                       │                          x
+         x                   x                       │                          x
+         x                   x                       x 2.1.0-rc2/saint-louis    x
+         x                   x                       │                          x
+         x                   x                       │                          x
+         x                   x                       │                          x
+         x                   x                       │                          x
 
 ```
 
@@ -152,7 +167,7 @@ particular branch to deploy on every change.
 
 The process of closing a release consists of building, tagging and publishing the given release of the branch.
 
-1. Make sure that the [milestone](https://github.com/hoprnet/hoprnet/milestones) issues are all close. Do not start the next step until all the issues and PR are closed.
+1. Make sure that the [milestone](https://github.com/hoprnet/hoprnet/milestones) issues are all closed. Do not start the next step until all the issues and PR are closed.
 2. Execute the manual workflow named [Close Release](https://github.com/hoprnet/hoprnet/actions/workflows/close-release.yaml) selecting the branch where you want to close it.
 3. A new PR will be created with the name `Close release <RELEASE_NUMBER>`. Follow the instructions on the PR and merge it.
 4. Review the contents of the new [Github Release](https://github.com/hoprnet/hoprnet/releases) created and modify accordingly
@@ -183,19 +198,12 @@ There should be a correspondence between the dappNode version an the upstream ve
 8. Click `Sign release` to sign the release (confirm in MM). New IPFS hash is created with the signed release, changes automatically in the Release hash field in the form.
 9. Click `Publish release` to publish the signed release (confirm transaction in MM).
 10. On the forked repo https://github.com/hoprnet/DAppNodePackage-Hopr GH page, do a Sync of the `main` branches from the Upstream repo.
+11. Publish in Element channel `releases` the IPFS hash of the new dappNode package
 
 ### Promote release
 
-The process of promoting the named release (bratislava, providence, etc) consists of creating or updating a given ${RELEASE_NAME} tag, branch and artifacts based on the recently closed released. This process should be executed after the closure of release candidates only or the first minor version (X.X.0).
+The process of promoting the named release consists of creating or updating a given ${RELEASE_NAME} tag, branch and artifacts based on the recently closed released. This process should be executed after the closure of release candidates only or the first minor version (X.X.0).
 
 1. Execute the manual workflow named [Promote Release](https://github.com/hoprnet/hoprnet/actions/workflows/promote-release.yaml) specifying the name of the release and the tag you want to bind it
 2. Create a release page in the wiki (Notion) at: https://www.notion.so/Testnets-e53255f7003f4c8eae2f1b6644a676e0
    You may use previous testnet pages as templates. Ensure all started nodes are documented.
-
-### Merge Back
-
-The process of merge back consists of bringing all the changes made in the release branch back to the master branch.
-
-1. Execute the manual workflow named [Merge Back](https://github.com/hoprnet/hoprnet/actions/workflows/merge-back.yaml)
-2. Review the new PR created by this workflow and approve it if the changes provided are correct.
-3. Remind that the release must be merged-back periodically to minimise conflicts whenever we want to merge a hotfix back to master.
